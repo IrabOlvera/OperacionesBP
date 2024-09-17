@@ -1,5 +1,4 @@
 from config import *
-
 st.header("Volumetrías mensuales")
 st.write("Revisión de los límites de operación por mes acumulado y corriente")
 
@@ -7,89 +6,94 @@ st.write("Revisión de los límites de operación por mes acumulado y corriente"
 st.subheader("Análisis Mensual", anchor="Mensuales", help="Selecciona las dimensiones a visualizar", divider="violet")
 
 # Leer DataFrame "volumes"
-
 data_path = r'C:\Users\opera\OneDrive\Documentos\GitHub\OperacionesBP\pages\Volumetrías\volumes.csv'
 df = pd.read_csv(data_path)
 
-# Convertir 'mes' a datetime (día/mes/año con dos dígitos para el año)
-df['mes'] = pd.to_datetime(df['mes'], format='%d/%m/%y')  # Ajustar el formato al de tus datos
-df['mes_nombre'] = df['mes'].dt.strftime('%B')
+# Convertir la columna 'mes' al formato de fecha
+df['mes'] = pd.to_datetime(df['mes'], format='%d/%m/%y')  # Ajusta el formato de fecha según sea necesario
 
-# Ordenar por fecha
-df.sort_values('mes', inplace=True)
-df['ordinal'] = df['mes'].map(datetime.toordinal)
+# Añadir columna de orden para los meses
+df['mes_order'] = df['mes'].dt.month
+df['mes_str'] = df['mes'].dt.strftime('%B')  # Nombre del mes como cadena
 
-# Opciones de selección
-options = ["Monto Total", "Transacciones","Ticket Promedio"]
-selected_options = st.multiselect("Elige las dimensiones a visualizar", options, default=options)
-
-# Crear subgráficas
-fig = make_subplots(
-    rows=len(selected_options), cols=1,
-    subplot_titles=[f"{option}" for option in selected_options],
-    shared_xaxes=True,
-    vertical_spacing=0.2  # Ajustar el espaciado vertical entre subgráficas
+# Selector para mostrar todas, Top 10 o Bottom 10 corporaciones
+filter_type = st.radio(
+    "Mostrar:",
+    ('Todas las Corporaciones', 'Top 10 por TRX', 'Bottom 10 por TRX', 'Top 10 por Monto', 'Bottom 10 por Monto')
 )
 
-# Graficar según las opciones seleccionadas
-for i, option in enumerate(selected_options):
-    if option == "Monto Total":
-        # Graficar Monto Total
-        fig.add_trace(
-            go.Scatter(x=df['mes'], y=df['montotal'], mode='markers+lines', name='Monto Total'),
-            row=i+1, col=1
-        )
-        
-        # Calcular y graficar la línea de tendencia para Monto Total
-        z = np.polyfit(df['ordinal'], df['montotal'], 1)
-        p = np.poly1d(z)
-        trend = p(df['ordinal'])
-        fig.add_trace(
-            go.Scatter(x=df['mes'], y=trend, mode='lines', name='Línea de Tendencia Monto Total', line=dict(dash='dash')),
-            row=i+1, col=1
-        )
+# Lógica para filtrar el DataFrame según la selección
+if filter_type == 'Top 10 por TRX':
+    filtered_df = df.nlargest(10, 'trx')
+elif filter_type == 'Bottom 10 por TRX':
+    filtered_df = df.nsmallest(10, 'trx')
+elif filter_type == 'Top 10 por Monto':
+    filtered_df = df.nlargest(10, 'mto')
+elif filter_type == 'Bottom 10 por Monto':
+    filtered_df = df.nsmallest(10, 'mto')
+else:
+    filtered_df = df  # Mostrar todas las corporaciones
+
+# Crear selector de corporaciones en Streamlit
+corporations = filtered_df['corporation'].unique().tolist()
+selected_corporations = st.multiselect("Selecciona Corporación", corporations, default=corporations)
+
+# Filtrar el DataFrame con base en la selección
+filtered_df = filtered_df[filtered_df['corporation'].isin(selected_corporations)]
+
+# Obtener todos los meses únicos para asegurar que todos estén en el gráfico
+all_months = pd.date_range(start=df['mes'].min(), end=df['mes'].max(), freq='MS').strftime('%B').tolist()
+
+# Crear gráficos de barras apiladas para Transacciones (TRX) y Montos (MTO)
+
+# Crear gráfico de barras apiladas para Transacciones (TRX)
+fig_trx = go.Figure()
+
+# Añadir trazas para cada corporación
+for corporation in selected_corporations:
+    df_corp = filtered_df[filtered_df['corporation'] == corporation]
+    df_corp = df_corp.groupby('mes_str').agg({'trx': 'sum'}).reindex(all_months, fill_value=0).reset_index()
     
-    elif option == "Transacciones":
-        # Graficar Transacciones
-        fig.add_trace(
-            go.Scatter(x=df['mes'], y=df['qty'], mode='markers+lines', name='Transacciones'),
-            row=i+1, col=1
-        )
-        
-        # Calcular y graficar la línea de tendencia para Transacciones
-        z = np.polyfit(df['ordinal'], df['qty'], 1)
-        p = np.poly1d(z)
-        trend = p(df['ordinal'])
-        fig.add_trace(
-            go.Scatter(x=df['mes'], y=trend, mode='lines', name='Línea de Tendencia Transacciones', line=dict(dash='dash')),
-            row=i+1, col=1
-        )
-    elif option == "Ticket Promedio":
-        # Graficar Ticket promedio
-        fig.add_trace(
-            go.Scatter(x=df['mes'], y=df['Ticket promedio'], mode='markers+lines', name='Ticket promedio'),
-            row=i+1, col=1
-        )
-        
-        # Calcular y graficar la línea de tendencia para Transacciones
-        z = np.polyfit(df['ordinal'], df['Ticket promedio'], 1)
-        p = np.poly1d(z)
-        trend = p(df['ordinal'])
-        fig.add_trace(
-            go.Scatter(x=df['mes'], y=trend, mode='lines', name='Línea de Tendencia Transacciones', line=dict(dash='dash')),
-            row=i+1, col=1
-        )
+    fig_trx.add_trace(go.Bar(
+        x=df_corp['mes_str'],
+        y=df_corp['trx'],
+        name=corporation,
+        marker_color=CUSTOM_PALETTE[selected_corporations.index(corporation) % len(CUSTOM_PALETTE)]
+    ))
 
-# Configuración de etiquetas y títulos
-fig.update_layout(
-    title='Análisis Mensual con Líneas de Tendencia',
-    xaxis_title='Mes',
-    xaxis_tickangle=-45,
-    xaxis=dict(
-        tickformat='%d/%m/%y'  # Formato de fecha para el eje x
-    ),
-    yaxis_title='Valor',
+fig_trx.update_layout(
+    title="Transacciones por Mes",
+    xaxis_title="Mes",
+    yaxis_title="Transacciones (TRX)",
+    barmode='stack'
 )
 
-# Mostrar la gráfica en Streamlit
-st.plotly_chart(fig)
+# Mostrar gráfico de barras apiladas en Streamlit
+st.subheader("Transacciones (TRX)")
+st.plotly_chart(fig_trx)
+
+# Crear gráfico de barras apiladas para Montos (MTO)
+fig_mto = go.Figure()
+
+# Añadir trazas para cada corporación
+for corporation in selected_corporations:
+    df_corp = filtered_df[filtered_df['corporation'] == corporation]
+    df_corp = df_corp.groupby('mes_str').agg({'mto': 'sum'}).reindex(all_months, fill_value=0).reset_index()
+    
+    fig_mto.add_trace(go.Bar(
+        x=df_corp['mes_str'],
+        y=df_corp['mto'],
+        name=corporation,
+        marker_color=CUSTOM_PALETTE[selected_corporations.index(corporation) % len(CUSTOM_PALETTE)]
+    ))
+
+fig_mto.update_layout(
+    title="Montos por Mes",
+    xaxis_title="Mes",
+    yaxis_title="Montos (MTO)",
+    barmode='stack'
+)
+
+# Mostrar gráfico de barras apiladas en Streamlit
+st.subheader("Montos (MTO)")
+st.plotly_chart(fig_mto)

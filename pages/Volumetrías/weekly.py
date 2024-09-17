@@ -8,7 +8,7 @@ data_path = 'C:\\Users\\opera\\OneDrive\\Documentos\\GitHub\\OperacionesBP\\page
 df = pd.read_csv(data_path)
 
 # Conversión de columnas y limpieza
-df['Fecha'] = pd.to_datetime(df['Fecha'], format='%d/%m/%y')  # Asegúrate de ajustar el formato si es necesario
+df['Fecha'] = pd.to_datetime(df['Fecha'], format='%d/%m/%y')
 df['Sucursal'] = df['Sucursal'].astype(str).str.strip()
 df['Error'] = df['Error'].astype(str).str.strip()
 df['Owner'] = df['Owner'].astype(str).str.strip()
@@ -31,6 +31,10 @@ fecha_inicio_seleccionada, fecha_fin_seleccionada = st.sidebar.date_input(
     min_value=fecha_inicio,
     max_value=fecha_fin
 )
+
+# Convertir las fechas seleccionadas a datetime64[ns]
+fecha_inicio_seleccionada = pd.to_datetime(fecha_inicio_seleccionada)
+fecha_fin_seleccionada = pd.to_datetime(fecha_fin_seleccionada)
 
 # Filtrar el DataFrame por el rango de fechas seleccionado
 df_filtered = df[(df['Fecha'] >= fecha_inicio_seleccionada) & (df['Fecha'] <= fecha_fin_seleccionada)]

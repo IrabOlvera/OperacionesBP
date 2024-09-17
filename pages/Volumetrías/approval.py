@@ -1,6 +1,5 @@
 from config import *
 
-
 # Leer el DataFrame
 data_path = r'C:\Users\opera\OneDrive\Documentos\GitHub\OperacionesBP\pages\Volumetrías\approval.csv'
 df = pd.read_csv(data_path)
